@@ -1,0 +1,18 @@
+{
+    "os": "Linux-5.13.0-1031-azure-x86_64-with-glibc2.17",
+    "python": "3.8.13",
+    "heartbeatAt": "2022-07-26T12:35:56.770756",
+    "startedAt": "2022-07-26T12:35:54.095827",
+    "docker": null,
+    "gpu": "Tesla T4",
+    "gpu_count": 1,
+    "cpu_count": 16,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "main.py",
+    "codePath": "main.py",
+    "host": "GCRAZGDL2334",
+    "username": "FAREAST.v-linyukong",
+    "executable": "/home/v-linyukong/.conda/envs/crystal_generation/bin/python"
+}
