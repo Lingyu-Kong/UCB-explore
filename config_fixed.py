@@ -7,25 +7,26 @@ sampler_policy=["boltzmann","maxucb"]
 uncertainty_policy=["count_based","rnd"]
 epsilon_policy=["gaussian","uniform"]
 
-data_path="./40.csv"
-
 shared_params={
     "device":device,
-    "num_atoms":40,
+    "num_atoms":10,
     "pos_scale": 2.0,
-    "action_scale": 0.5,
-    "memory_size":1000,
+    "action_scale": 1.0,
+    "memory_size":5000,
     "sampler_policy":"boltzmann",
     "uncertainty_policy":"count_based",
-    "epsilon_policy":"gaussian",
-    "use_dataset":True,
+    "epsilon_policy":"uniform",
+    "use_dataset":False,
     "if_replace":False,
     "if_greedy":True,
 }
 
+data_file="./"+str(shared_params["num_atoms"])+".csv"
+path_file="./"+str(shared_params["num_atoms"])+"_path.csv"
+
 training_params={
-    "num_steps":10000,
-    "update_batch_size":32,
+    "num_steps":100000,
+    "update_batch_size":5000,
 }
 
 gnn_params = {
@@ -111,7 +112,7 @@ boltzmann_params={
     "env_params":{
         "if_trunc":True,
         "max_steps":10000,
-        "fmax":0.005,
+        "fmax":0.0001,
     },
     "generator_params":{
         "num_atoms":shared_params["num_atoms"],
@@ -121,9 +122,9 @@ boltzmann_params={
         "action_policy":shared_params["epsilon_policy"],
     },
     "num_atoms":shared_params["num_atoms"],
-    "alpha":10.0,
+    "alpha":2.0,
     "use_dataset":shared_params["use_dataset"],
-    "dataset_path":data_path,
+    "dataset_path":data_file,
     "if_memory_update":shared_params["if_replace"],
     "if_greedy":shared_params["if_greedy"],
 }

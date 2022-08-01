@@ -4,10 +4,11 @@ from torch.nn import Softmax
 import torch.nn.functional as F
 import time
 import wandb
+import matplotlib.pyplot as plt
 
 from sampler.uncertainty_critic import Count_Based_Uncertainty,RND_Uncertainty
 from sampler.value_critic import ValueCritic
-from sampler.memory import Memory
+from sampler.memory import Memory,MaxMemory
 from sampler.env import Env
 from sampler.random_generator import Random_Generator
 from utils.tensor_utils import to_tensor
@@ -33,7 +34,7 @@ class BoltzmannSampler(object):
         if_memory_update:bool,
         if_greedy:bool,
     ):
-        self.memory = Memory(**memory_params)
+        self.memory = MaxMemory(**memory_params)
         self.value_critic = ValueCritic(**value_critic_params)
         self.uncertainty_critic = uncertainty_type[uncertainty](**uncertainty_critic_params)
         self.env=Env(**env_params)
@@ -50,7 +51,18 @@ class BoltzmannSampler(object):
         if not self.use_dataset:
             states=np.zeros((self.memory.memory_size,self.num_atoms,3))
             for i in range(self.memory.memory_size):
-                states[i]=self.generator.single_conform_sample()
+                retry=True
+                while retry:
+                    retry=False
+                    state=self.generator.conform_sample()
+                    for j in range(i):
+                        distance=np.linalg.norm((states[j].reshape(-1))-(state.reshape(-1)),ord=2,axis=0)
+                        if distance<5:
+                            retry=True
+                            break
+                    if not retry:
+                        states[i]=state
+                print("found state:",i)
             self.memory.init_state_memory(states)
         else:
             states=np.loadtxt(open(self.dataset_path),delimiter=",",skiprows=0)
@@ -75,9 +87,11 @@ class BoltzmannSampler(object):
             left+=batch_size
 
     def sample(self):
-        probs=Softmax(dim=0)(to_tensor(self.ucbs)).detach().cpu().numpy()
+        probs=Softmax(dim=0)(10*to_tensor(self.ucbs)).detach().cpu().numpy()
         indexs=list(range(self.memory.memory_size))
         index=np.random.choice(indexs,p=probs)
+        # index=np.argmax(self.ucbs)
+        # index=np.random.randint(0,self.memory.memory_size)
         state=self.memory.read_state(index)
         return state,index
 
@@ -119,8 +133,8 @@ class BoltzmannSampler(object):
         for i in range(num_steps):
             start_time=time.time()
             state,index=self.sample()
-            epsilon=self.generator.single_action_sample()
-            _,energy,state_prime=self.env.relax((state+epsilon).tolist())
+            epsilon=self.generator.action_sample(state)
+            energy=self.env.compute((state+epsilon).tolist())
             self.memory.store_reward(index=index,reward=energy)
             rewards=self.memory.read_rewards(index=index)
             if self.if_memory_update:
@@ -132,8 +146,8 @@ class BoltzmannSampler(object):
                 self.value_critic.optimizer.step()
                 self.value_critic.scheduler.step()
             self.uncertainty_critic.step(state,index)
-            if self.if_memory_update:
-                self.memory_update(state_prime)
+            # if self.if_memory_update:
+            #     self.memory_update(state_prime)
             self.ucb_update(update_batch_size)
             if energy<min_energy:
                 min_energy=energy
@@ -142,5 +156,18 @@ class BoltzmannSampler(object):
                        "min_energy":min_energy,})
             if self.if_memory_update:
                 wandb.log({"v_loss":v_loss.item(),})
-            print("Steps: {}/{}, Time: {}, Energy Found: {}".format(i,num_steps,end_time-start_time,energy))
+
+            if i%10000==9999:
+                choices=np.random.choice(self.memory.memory_size,size=update_batch_size,replace=False)
+                states=self.memory.state_memory[choices]
+                v_values=(-self.memory.compute_average_value(choices)).tolist()
+                u_values=(self.alpha*self.uncertainty_critic.forward(to_tensor(states),choices).view(-1)).tolist()
+                plt.figure()
+                plt.plot(v_values,label="v_values")
+                plt.plot(u_values,label="u_values")
+                plt.legend()
+                wandb.log({"steps_"+str(i):plt})
+
+                print("Steps: {}/{}, Time: {}, Energy Found: {}".format(i,num_steps,end_time-start_time,energy))
+        
         return min_energy
